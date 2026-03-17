@@ -65,7 +65,7 @@
 | 14 | ошибка | Недопустимая лексема | любой недопустимый символ |
 
 ## Диаграмма состояний
-
+![1](https://github.com/user-attachments/assets/ed1e924e-c6c9-4b96-9287-bcf685f933aa)
 
 ### Описание работы автомата:
 
@@ -94,11 +94,12 @@
 
 ### Пример 1: Корректная строка
 **Вход:** `String message = "Hello World";`
+<img width="587" height="275" alt="2" src="https://github.com/user-attachments/assets/f9d9d881-6a5c-4599-b680-47960b7bc91d" />
 
 
 ### Пример 2: Строка с escape-последовательностями
 **Вход:** `String path = "C:\\Program Files\\Java";`
-
+<img width="584" height="273" alt="3" src="https://github.com/user-attachments/assets/6203757b-066b-46d4-9f92-44ad11643a26" />
 
 ### Пример 3: Многострочный пример
 **Вход:**
@@ -107,17 +108,18 @@ String name = "John";
 int age = 25;
 String greeting = "Hello\n" + name + "!";
 ```
-
+<img width="580" height="433" alt="4" src="https://github.com/user-attachments/assets/8bf05c0c-ad6c-4b05-9064-2e9475cecc80" />
 
 ### Пример 4: Строка с ошибкой (незакрытая кавычка)
 **Вход:** `String text = "Unclosed string;`
-
+<img width="1175" height="365" alt="image" src="https://github.com/user-attachments/assets/d6fb9073-0c40-4fe0-bbbe-8a7c8233f9a0" />
 
 ### Пример 5: Недопустимая escape-последовательность
 **Вход:** `String bad = "Invalid\escape";`
-
+<img width="1082" height="363" alt="image" src="https://github.com/user-attachments/assets/9390eacb-2e2f-483d-b813-f2d444fc2d27" />
 
 ### Пример 6: Недопустимый символ
 **Вход:** `String name = "John" @;`
+<img width="1175" height="402" alt="image" src="https://github.com/user-attachments/assets/63e00559-75a6-4e96-ae0d-80558afc38bf" />
 
 
