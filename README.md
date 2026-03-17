@@ -30,7 +30,7 @@
 - .NET Framework 4.7.2 
 
 ### Запуск .exe файла
-1. Скачать архив с последнего [релиза](https://github.com/sofia000001/WpfApp1/releases)
+1. Скачать архив с последнего [релиза](https://github.com/sofia000001/WpfApp2/releases/tag/V1)
 2. Распаковать архив
 3. Запустить `WpfApp2.exe` 
 
