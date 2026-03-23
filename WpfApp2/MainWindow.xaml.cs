@@ -7,7 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
 
-namespace WpfApp1
+namespace WpfApp2
 {
     public partial class MainWindow : Window
     {
