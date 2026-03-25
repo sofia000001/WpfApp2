@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using Microsoft.Win32;
+using WpfApp2;
 
 namespace WpfApp2
 {
@@ -14,15 +15,19 @@ namespace WpfApp2
         private string currentFilePath = null;
         private bool isTextChanged = false;
         private LexicalAnalyzer lexicalAnalyzer;
-        private ObservableCollection<Token> tokens;
+        private Parser parser;
+        private ObservableCollection<SyntaxError> syntaxErrors;
 
         public MainWindow()
         {
             InitializeComponent();
             lexicalAnalyzer = new LexicalAnalyzer();
-            tokens = new ObservableCollection<Token>();
-            ResultsDataGrid.ItemsSource = tokens;
-            UpdateStatus("Готов", 0, 0);
+            parser = new Parser();
+            syntaxErrors = new ObservableCollection<SyntaxError>();
+
+            ErrorsDataGrid.ItemsSource = syntaxErrors;
+
+            UpdateStatus("Готов", 0);
         }
 
         // ФАЙЛ 
@@ -31,12 +36,12 @@ namespace WpfApp2
             if (CheckSaveChanges())
             {
                 EditorTextBox.Clear();
-                tokens.Clear();
+                syntaxErrors.Clear();
                 currentFilePath = null;
                 isTextChanged = false;
                 UpdateTitle();
-                UpdateStatus("Создан новый файл", 0, 0);
-                ResultsDataGrid.Background = new SolidColorBrush(Colors.White);
+                UpdateStatus("Создан новый файл", 0);
+                ErrorsDataGrid.Background = new SolidColorBrush(Colors.White);
             }
         }
 
@@ -55,9 +60,8 @@ namespace WpfApp2
                         currentFilePath = dlg.FileName;
                         isTextChanged = false;
                         UpdateTitle();
-                        UpdateStatus($"Открыт: {dlg.FileName}", 0, 0);
+                        UpdateStatus($"Открыт: {dlg.FileName}", 0);
 
-                        // Анализ при открытии
                         AnalyzeText();
                     }
                     catch (Exception ex)
@@ -82,8 +86,7 @@ namespace WpfApp2
                     File.WriteAllText(currentFilePath, EditorTextBox.Text);
                     isTextChanged = false;
                     UpdateTitle();
-                    UpdateStatus($"Сохранено: {currentFilePath}",
-                        CountValidTokens(), CountErrorTokens());
+                    UpdateStatus($"Сохранено: {currentFilePath}", syntaxErrors.Count);
                 }
                 catch (Exception ex)
                 {
@@ -106,8 +109,7 @@ namespace WpfApp2
                     currentFilePath = dlg.FileName;
                     isTextChanged = false;
                     UpdateTitle();
-                    UpdateStatus($"Сохранено как: {dlg.FileName}",
-                        CountValidTokens(), CountErrorTokens());
+                    UpdateStatus($"Сохранено как: {dlg.FileName}", syntaxErrors.Count);
                 }
                 catch (Exception ex)
                 {
@@ -131,7 +133,7 @@ namespace WpfApp2
             if (EditorTextBox.CanUndo)
             {
                 EditorTextBox.Undo();
-                UpdateStatus("Отмена действия", CountValidTokens(), CountErrorTokens());
+                UpdateStatus("Отмена действия", syntaxErrors.Count);
             }
         }
 
@@ -140,38 +142,38 @@ namespace WpfApp2
             if (EditorTextBox.CanRedo)
             {
                 EditorTextBox.Redo();
-                UpdateStatus("Возврат действия", CountValidTokens(), CountErrorTokens());
+                UpdateStatus("Возврат действия", syntaxErrors.Count);
             }
         }
 
         private void Cut_Click(object sender, RoutedEventArgs e)
         {
             EditorTextBox.Cut();
-            UpdateStatus("Вырезано", CountValidTokens(), CountErrorTokens());
+            UpdateStatus("Вырезано", syntaxErrors.Count);
         }
 
         private void Copy_Click(object sender, RoutedEventArgs e)
         {
             EditorTextBox.Copy();
-            UpdateStatus("Скопировано", CountValidTokens(), CountErrorTokens());
+            UpdateStatus("Скопировано", syntaxErrors.Count);
         }
 
         private void Paste_Click(object sender, RoutedEventArgs e)
         {
             EditorTextBox.Paste();
-            UpdateStatus("Вставлено", CountValidTokens(), CountErrorTokens());
+            UpdateStatus("Вставлено", syntaxErrors.Count);
         }
 
         private void Delete_Click(object sender, RoutedEventArgs e)
         {
             EditorTextBox.SelectedText = "";
-            UpdateStatus("Удалено", CountValidTokens(), CountErrorTokens());
+            UpdateStatus("Удалено", syntaxErrors.Count);
         }
 
         private void SelectAll_Click(object sender, RoutedEventArgs e)
         {
             EditorTextBox.SelectAll();
-            UpdateStatus("Выделено всё", CountValidTokens(), CountErrorTokens());
+            UpdateStatus("Выделено всё", syntaxErrors.Count);
         }
 
         // АНАЛИЗ
@@ -180,52 +182,46 @@ namespace WpfApp2
             AnalyzeText();
         }
 
-        // Очистка результатов
         private void ClearResults_Click(object sender, RoutedEventArgs e)
         {
-            tokens.Clear();
-            ResultsDataGrid.Background = new SolidColorBrush(Colors.White);
-            UpdateStatus("Результаты очищены", 0, 0);
+            syntaxErrors.Clear();
+            ErrorsDataGrid.Background = new SolidColorBrush(Colors.White);
+            UpdateStatus("Результаты очищены", 0);
         }
 
         private void AnalyzeText()
         {
             try
             {
-                // Очищаем предыдущие результаты
-                tokens.Clear();
+                syntaxErrors.Clear();
 
-                // Получаем текст из редактора
                 string text = EditorTextBox.Text;
 
-                // Для отладки
                 System.Diagnostics.Debug.WriteLine($"Анализ текста: {text}");
 
-                // Выполняем лексический анализ
-                var results = lexicalAnalyzer.Analyze(text);
+                // Лексический анализ
+                var lexicalResults = lexicalAnalyzer.Analyze(text);
 
-                // Добавляем результаты в коллекцию
-                foreach (var token in results)
+                // Синтаксический анализ
+                var syntaxErrorsList = parser.Parse(lexicalResults);
+
+                // Добавляем ошибки в коллекцию (сохраняем порядок по позиции - от начала к концу)
+                foreach (var error in syntaxErrorsList)
                 {
-                    tokens.Add(token);
-                    // Для отладки
-                    System.Diagnostics.Debug.WriteLine($"Токен: Code={token.Code}, Type={token.Type}, Value='{token.Value}', IsError={token.IsError}");
+                    syntaxErrors.Add(error);
                 }
 
-                // Подсчитываем статистику
-                int validCount = CountValidTokens();
-                int errorCount = CountErrorTokens();
+                int syntaxErrorsCount = syntaxErrors.Count;
 
-                UpdateStatus("Анализ завершен", validCount, errorCount);
+                UpdateStatus("Анализ выполнен", syntaxErrorsCount);
 
-                // Если есть ошибки, подсвечиваем фон DataGrid
-                if (errorCount > 0)
+                if (syntaxErrorsCount > 0)
                 {
-                    ResultsDataGrid.Background = new SolidColorBrush(Colors.LightPink);
+                    ErrorsDataGrid.Background = new SolidColorBrush(Colors.LightPink);
                 }
                 else
                 {
-                    ResultsDataGrid.Background = new SolidColorBrush(Colors.LightGreen);
+                    ErrorsDataGrid.Background = new SolidColorBrush(Colors.LightGreen);
                 }
             }
             catch (Exception ex)
@@ -235,75 +231,67 @@ namespace WpfApp2
             }
         }
 
-        // Навигация по ошибкам
-        private void ResultsDataGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        // НАВИГАЦИЯ ПО ОШИБКАМ
+        private void ErrorsDataGrid_MouseDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            if (ResultsDataGrid.SelectedItem is Token selectedToken && selectedToken.IsError)
+            if (ErrorsDataGrid.SelectedItem is SyntaxError selectedError)
             {
-                GoToErrorPosition(selectedToken);
+                GoToErrorPosition(selectedError);
             }
         }
 
-        private void GoToErrorPosition(Token token)
+        private void GoToErrorPosition(SyntaxError error)
         {
             try
             {
-                // Разбиваем текст на строки
                 string[] lines = EditorTextBox.Text.Split('\n');
                 int position = 0;
 
-                // Вычисляем глобальную позицию в тексте
-                for (int i = 0; i < token.Line - 1; i++)
+                for (int i = 0; i < error.Line - 1; i++)
                 {
                     if (i < lines.Length)
                     {
-                        position += lines[i].Length + 1; // +1 для символа новой строки
+                        position += lines[i].Length + 1;
                     }
                 }
 
-                position += token.StartPos - 1; // корректируем позицию
+                position += error.Position - 1;
 
-                // Устанавливаем курсор
                 EditorTextBox.Focus();
-                EditorTextBox.Select(position, Math.Max(1, token.Value.Length));
-                EditorTextBox.ScrollToLine(token.Line - 1);
+                EditorTextBox.Select(position, Math.Max(1, error.Fragment.Length));
+                EditorTextBox.ScrollToLine(error.Line - 1);
 
-                UpdateStatus($"Ошибка: {token.ErrorMessage} (строка {token.Line}, позиция {token.StartPos})",
-                    CountValidTokens(), CountErrorTokens());
+                UpdateStatus($"Ошибка: {error.Description} (строка {error.Line}, позиция {error.Position})", syntaxErrors.Count);
             }
             catch (Exception ex)
             {
-                UpdateStatus($"Ошибка при переходе: {ex.Message}",
-                    CountValidTokens(), CountErrorTokens());
+                UpdateStatus($"Ошибка при переходе: {ex.Message}", syntaxErrors.Count);
             }
         }
 
         // СПРАВКА 
         private void Help_Click(object sender, RoutedEventArgs e)
         {
-            string helpText = "СПРАВКА - Лексический анализатор строковых констант Java:\n\n" +
+            string helpText = "СИНТАКСИЧЕСКИЙ АНАЛИЗАТОР - Объявление строковых констант Java\n\n" +
                             "ОСНОВНЫЕ ФУНКЦИИ:\n" +
-                            "- Введите Java код в верхнюю область\n" +
+                            "- Введите Java код в область редактирования\n" +
                             "- Нажмите кнопку 'Пуск' или F5 для анализа\n" +
-                            "- Результаты отобразятся в таблице ниже\n\n" +
-                            "РАСПОЗНАВАЕМЫЕ ЛЕКСЕМЫ:\n" +
-                            "- Строковые константы: \"Hello World\" (код 1)\n" +
-                            "- Целые числа: 123, 42 (код 2)\n" +
-                            "- Идентификаторы: переменные (код 3)\n" +
-                            "- Ключевое слово String: (код 4)\n" +
-                            "- Оператор присваивания =: (код 5)\n" +
-                            "- Конец оператора ;: (код 6)\n" +
-                            "- Пробел: (код 7)\n" +
-                            "- Оператор +: (код 8)\n" +
-                            "- Оператор -: (код 9)\n" +
-                            "- Оператор /: (код 10)\n" +
-                            "- Оператор *: (код 11)\n" +
-                            "- Открывающая скобка (: (код 12)\n" +
-                            "- Закрывающая скобка ): (код 13)\n\n" +
-                            "ОШИБКИ (код 14):\n" +
-                            "- Незакрытые строки (встречен символ \\n без закрывающей кавычки)\n" +
-                            "- Недопустимые escape-последовательности\n" +
-                            "- Недопустимые символы\n\n" +
+                            "- Результаты синтаксического анализа отобразятся в таблице ошибок\n\n" +
+                            "СИНТАКСИЧЕСКАЯ КОНСТРУКЦИЯ:\n" +
+                            "String идентификатор = выражение;\n\n" +
+                            "ПРИМЕРЫ КОРРЕКТНЫХ СТРОК:\n" +
+                            "String name = \"Hello\";\n" +
+                            "String result = 123;\n" +
+                            "String value = (10 + 20) * 2;\n\n" +
+                            "ДИАГНОСТИРУЕМЫЕ ОШИБКИ:\n" +
+                            "- Отсутствие ключевого слова 'String'\n" +
+                            "- Отсутствие идентификатора\n" +
+                            "- Отсутствие оператора '='\n" +
+                            "- Отсутствие ';' в конце\n" +
+                            "- Незакрытая строковая константа\n" +
+                            "- Несбалансированные скобки\n" +
+                            "- Некорректное выражение\n" +
+                            "- Недопустимые символы (&, &&, @, #, $, % и т.д.)\n\n" +
                             "НАВИГАЦИЯ:\n" +
                             "- Двойной клик на строке с ошибкой - переход к месту ошибки";
 
@@ -312,26 +300,12 @@ namespace WpfApp2
 
         private void About_Click(object sender, RoutedEventArgs e)
         {
-            string aboutText = "Лексический анализатор строковых констант Java\n" +
-                             "Лабораторная работа №2\n\n" +
-                             "Автор: Дарчук Софья\n\n" +
+            string aboutText = "Синтаксический анализатор строковых констант Java\n" +
+                             "Лабораторная работа №3\n\n" +
+                             "Автор: Дарчук Софья\n" +
+                             "Группа: АП-326\n\n" +
                              "Вариант: Объявление и инициализация строковой константы\n" +
-                             "на языке Java\n\n" +
-                             "КОДЫ ЛЕКСЕМ:\n" +
-                             "1 - строковая константа\n" +
-                             "2 - целое без знака\n" +
-                             "3 - идентификатор\n" +
-                             "4 - ключевое слово String\n" +
-                             "5 - оператор присваивания =\n" +
-                             "6 - конец оператора ;\n" +
-                             "7 - пробел\n" +
-                             "8 - оператор +\n" +
-                             "9 - оператор -\n" +
-                             "10 - оператор /\n" +
-                             "11 - оператор *\n" +
-                             "12 - открывающая скобка (\n" +
-                             "13 - закрывающая скобка )\n" +
-                             "14 - ошибка";
+                             "на языке Java";
 
             MessageBox.Show(aboutText, "О программе", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -341,6 +315,22 @@ namespace WpfApp2
         {
             isTextChanged = true;
             UpdateTitle();
+            UpdateCursorPosition();
+        }
+
+        private void EditorTextBox_SelectionChanged(object sender, RoutedEventArgs e)
+        {
+            UpdateCursorPosition();
+        }
+
+        private void UpdateCursorPosition()
+        {
+            int line = EditorTextBox.GetLineIndexFromCharacterIndex(EditorTextBox.CaretIndex);
+            int col = EditorTextBox.CaretIndex - EditorTextBox.GetCharacterIndexFromLineIndex(line);
+
+            int totalBytes = System.Text.Encoding.UTF8.GetByteCount(EditorTextBox.Text);
+
+            CursorPositionText.Text = $"Стр.: {line + 1}  Стб.: {col + 1}  Размер: {totalBytes} байт";
         }
 
         private bool CheckSaveChanges()
@@ -372,7 +362,7 @@ namespace WpfApp2
 
         private void UpdateTitle()
         {
-            string title = "Лексический анализатор Java";
+            string title = "Синтаксический анализатор Java";
             if (!string.IsNullOrEmpty(currentFilePath))
             {
                 title += $" - {System.IO.Path.GetFileName(currentFilePath)}";
@@ -384,32 +374,17 @@ namespace WpfApp2
             this.Title = title;
         }
 
-        private void UpdateStatus(string message, int validTokens, int errorTokens)
+        private void UpdateStatus(string message, int syntaxErrors)
         {
             StatusText.Text = message;
-            StatsText.Text = $"Лексем: {validTokens + errorTokens} | Ошибок: {errorTokens}";
-        }
-
-        private int CountValidTokens()
-        {
-            int count = 0;
-            foreach (var token in tokens)
+            if (syntaxErrors == 0)
             {
-                if (!token.IsError)
-                    count++;
+                StatsText.Text = "Анализ выполнен: ошибок нет";
             }
-            return count;
-        }
-
-        private int CountErrorTokens()
-        {
-            int count = 0;
-            foreach (var token in tokens)
+            else
             {
-                if (token.IsError)
-                    count++;
+                StatsText.Text = $"Найдено ошибок: {syntaxErrors}";
             }
-            return count;
         }
 
         protected override void OnClosing(CancelEventArgs e)

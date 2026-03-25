@@ -54,7 +54,6 @@ namespace WpfApp2
             "String", "int", "double", "boolean", "char", "byte", "short", "long", "float"
         };
 
-        // Проверка, является ли строка корректным идентификатором 
         private bool IsValidIdentifier(string s)
         {
             if (string.IsNullOrEmpty(s) || !(char.IsLetter(s[0]) || s[0] == '_'))
@@ -67,7 +66,6 @@ namespace WpfApp2
             return true;
         }
 
-        // Проверка, является ли строка корректным числом 
         private bool IsValidNumber(string s)
         {
             if (string.IsNullOrEmpty(s)) return false;
@@ -76,26 +74,6 @@ namespace WpfApp2
                 if (!char.IsDigit(c)) return false;
             }
             return true;
-        }
-
-        // Проверка, является ли последовательность полностью корректной лексемой
-        private bool IsFullyValidToken(string s)
-        {
-            if (string.IsNullOrEmpty(s)) return false;
-
-            for (int i = 0; i < s.Length; i++)
-            {
-                char c = s[i];
-                if (!char.IsLetterOrDigit(c) && c != '_')
-                    return false;
-            }
-            return true;
-        }
-
-        // Проверка, является ли символ допустимым для корректной лексемы
-        private bool IsValidCharForToken(char c)
-        {
-            return char.IsLetterOrDigit(c) || c == '_';
         }
 
         public List<Token> Analyze(string text)
@@ -116,7 +94,7 @@ namespace WpfApp2
                     continue;
                 }
 
-                // Возврат 
+                // Возврат каретки
                 if (c == '\r')
                 {
                     position++;
@@ -163,7 +141,6 @@ namespace WpfApp2
                 }
 
                 // Строковые константы
-
                 if (c == '"')
                 {
                     int startPos = position;
@@ -173,9 +150,18 @@ namespace WpfApp2
                     i++;
                     position++;
 
-                    while (i < text.Length && text[i] != '"' && text[i] != '\n')
+                    bool closed = false;
+                    while (i < text.Length && text[i] != '\n')
                     {
-                        if (text[i] == '\\')
+                        if (text[i] == '"')
+                        {
+                            sb.Append(text[i]);
+                            i++;
+                            position++;
+                            closed = true;
+                            break;
+                        }
+                        else if (text[i] == '\\')
                         {
                             sb.Append(text[i]);
                             i++;
@@ -195,11 +181,8 @@ namespace WpfApp2
                         }
                     }
 
-                    if (i < text.Length && text[i] == '"')
+                    if (closed)
                     {
-                        sb.Append(text[i]);
-                        i++;
-                        position++;
                         tokens.Add(new Token
                         {
                             Code = CODE_STRING,
@@ -214,7 +197,7 @@ namespace WpfApp2
                     {
                         tokens.Add(new Token
                         {
-                            Code = CODE_ERROR,
+                            Code = CODE_STRING,
                             Type = "ОШИБКА: Незакрытая строковая константа",
                             Value = sb.ToString(),
                             Line = startLine,
@@ -230,8 +213,7 @@ namespace WpfApp2
                     continue;
                 }
 
-                // односимвольные операторы
-
+                // Односимвольные операторы
                 if (c == '=' || c == ';' || c == '+' || c == '-' || c == '/' || c == '*' || c == '(' || c == ')')
                 {
                     int code = c == '=' ? CODE_ASSIGN :
@@ -255,8 +237,7 @@ namespace WpfApp2
                     continue;
                 }
 
-                // корректные идентификаторы и числа
-
+                // Идентификаторы и числа
                 if (char.IsLetter(c) || char.IsDigit(c) || c == '_')
                 {
                     int startPos = position;
@@ -275,80 +256,39 @@ namespace WpfApp2
 
                     string tokenValue = sb.ToString();
 
-                    // Проверяем, что после последовательности идет допустимый разделитель
-                    bool hasValidSeparator = true;
-                    if (i < text.Length)
+                    if (keywords.Contains(tokenValue))
                     {
-                        char nextChar = text[i];
-                        if (!(nextChar == ' ' || nextChar == '\t' || nextChar == '\n' || nextChar == '\r' ||
-                              nextChar == '=' || nextChar == ';' || nextChar == '+' || nextChar == '-' ||
-                              nextChar == '/' || nextChar == '*' || nextChar == '(' || nextChar == ')' ||
-                              nextChar == '"'))
-                        {
-                            hasValidSeparator = false;
-                        }
+                        tokens.Add(CreateToken(CODE_KEYWORD, "ключевое слово", tokenValue, startLine, startPos));
                     }
-
-                    if (hasValidSeparator)
+                    else if (IsValidNumber(tokenValue))
                     {
-                        if (keywords.Contains(tokenValue))
-                        {
-                            tokens.Add(CreateToken(CODE_KEYWORD, "ключевое слово", tokenValue, startLine, startPos));
-                        }
-                        else if (IsValidNumber(tokenValue))
-                        {
-                            tokens.Add(CreateToken(CODE_NUMBER, "целое без знака", tokenValue, startLine, startPos));
-                        }
-                        else if (IsValidIdentifier(tokenValue))
-                        {
-                            tokens.Add(CreateToken(CODE_IDENTIFIER, "идентификатор", tokenValue, startLine, startPos));
-                        }
-                        else
-                        {
-                            tokens.Add(CreateToken(CODE_ERROR, "ОШИБКА: Некорректная лексема", tokenValue, startLine, startPos));
-                        }
-                        i--;
-                        continue;
+                        tokens.Add(CreateToken(CODE_NUMBER, "целое без знака", tokenValue, startLine, startPos));
+                    }
+                    else if (IsValidIdentifier(tokenValue))
+                    {
+                        tokens.Add(CreateToken(CODE_IDENTIFIER, "идентификатор", tokenValue, startLine, startPos));
                     }
                     else
                     {
-                        // Если после последовательности идет недопустимый символ - вся последовательность становится ошибкой
-                        sb.Append(text[i]);
-                        i++;
-                        position++;
-
-                        while (i < text.Length)
-                        {
-                            char currentChar = text[i];
-                            if (currentChar == ' ' || currentChar == '\t' || currentChar == '\n' || currentChar == '\r' ||
-                                currentChar == '=' || currentChar == ';' || currentChar == '"')
-                            {
-                                break;
-                            }
-                            sb.Append(currentChar);
-                            i++;
-                            position++;
-                        }
-
                         tokens.Add(new Token
                         {
                             Code = CODE_ERROR,
-                            Type = "ОШИБКА: Недопустимые символы",
-                            Value = sb.ToString(),
+                            Type = "ОШИБКА: Некорректная лексема",
+                            Value = tokenValue,
                             Line = startLine,
                             StartPos = startPos,
                             EndPos = position - 1,
                             IsError = true,
                             ErrorLine = startLine,
-                            ErrorMessage = $"Недопустимые символы: {sb}"
+                            ErrorMessage = "Некорректная лексема"
                         });
-                        i--;
-                        continue;
                     }
+
+                    i--;
+                    continue;
                 }
 
-                // любые другие символы
-
+                // Недопустимые символы (например, &, &&, @, #, $, %, ^ и т.д.)
                 int errorStartPos = position;
                 int errorStartLine = lineNumber;
                 StringBuilder errorGroup = new StringBuilder();
@@ -356,8 +296,12 @@ namespace WpfApp2
                 while (i < text.Length)
                 {
                     char currentChar = text[i];
+                    // Проверяем, является ли символ допустимым
                     if (currentChar == ' ' || currentChar == '\t' || currentChar == '\n' || currentChar == '\r' ||
-                        currentChar == '=' || currentChar == ';' || currentChar == '"')
+                        currentChar == '=' || currentChar == ';' || currentChar == '"' ||
+                        currentChar == '+' || currentChar == '-' || currentChar == '/' || currentChar == '*' ||
+                        currentChar == '(' || currentChar == ')' ||
+                        char.IsLetterOrDigit(currentChar) || currentChar == '_')
                     {
                         break;
                     }
@@ -371,14 +315,14 @@ namespace WpfApp2
                     tokens.Add(new Token
                     {
                         Code = CODE_ERROR,
-                        Type = "ОШИБКА: Недопустимые символы",
+                        Type = "ОШИБКА: Недопустимый символ",
                         Value = errorGroup.ToString(),
                         Line = errorStartLine,
                         StartPos = errorStartPos,
                         EndPos = position - 1,
                         IsError = true,
                         ErrorLine = errorStartLine,
-                        ErrorMessage = $"Недопустимые символы: {errorGroup}"
+                        ErrorMessage = $"Недопустимый символ: {errorGroup}"
                     });
                 }
 
